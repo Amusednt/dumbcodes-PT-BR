@@ -1,0 +1,16 @@
+# Definir a classe do app no arquivo .kv
+<NotaApp>:
+    # Criar um layout vertical
+    BoxLayout:
+        orientation: 'vertical'
+        
+        # Criar um campo de texto para digitar a nota
+        TextInput:
+            id: texto
+            multiline: True
+            size_hint_y: 0.8
+        
+        # Criar um botão para salvar a nota
+        Button:
+            text: 'Salvar'
+            on_press: root.salvar_nota()
