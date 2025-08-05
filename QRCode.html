@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escaneador e Gerador de QR Code</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab {
+            flex: 1;
+            background: #f8f9fa;
+            border: none;
+            padding: 15px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .qr-display {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px dashed #667eea;
+        }
+
+        .qr-display canvas {
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .download-btn {
+            background: #28a745;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .scanner-container {
+            text-align: center;
+            position: relative;
+        }
+
+        .scanner-overlay {
+            position: relative;
+            display: inline-block;
+        }
+
+        .scanner-overlay::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 200px;
+            border: 3px solid #667eea;
+            border-radius: 15px;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            color: #155724;
+            word-break: break-all;
+        }
+
+        .result a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .result a:hover {
+            text-decoration: underline;
+        }
+
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .info {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 QR Code Tool</h1>
+        
+        <!-- Abas para alternar entre gerar e escanear -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('generator')">🔗 Gerar QR</button>
+            <button class="tab" onclick="switchTab('scanner')">📸 Escanear QR</button>
+        </div>
+
+        <!-- Aba do Gerador de QR Code -->
+        <div id="generator" class="tab-content active">
+            <div class="input-group">
+                <label for="urlInput">🌐 Cole seu link aqui:</label>
+                <input type="url" id="urlInput" placeholder="https://exemplo.com" 
+                       onkeypress="handleEnter(event)">
+            </div>
+            
+            <button class="btn" onclick="generateQR()">✨ Gerar QR Code</button>
+            
+            <!-- Área onde o QR Code será exibido -->
+            <div id="qrResult" class="qr-display" style="display: none;">
+                <canvas id="qrCanvas"></canvas>
+                <div>
+                    <button class="btn download-btn" onclick="downloadQR()">
+                        💾 Baixar QR Code
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aba do Escaneador de QR Code -->
+        <div id="scanner" class="tab-content">
+            <div class="scanner-container">
+                <div class="scanner-overlay">
+                    <video id="video" autoplay muted playsinline></video>
+                </div>
+                <button class="btn" id="startBtn" onclick="startScanner()">
+                    📹 Iniciar Câmera
+                </button>
+                <button class="btn" id="stopBtn" onclick="stopScanner()" style="display: none; background: #dc3545;">
+                    ⏹️ Parar Câmera
+                </button>
+            </div>
+            
+            <!-- Resultado do scan -->
+            <div id="scanResult"></div>
+            
+            <div class="info">
+                💡 Posicione o QR Code dentro do quadrado para escanear
+            </div>
+        </div>
+    </div>
+
+    <!-- Canvas oculto para capturar frames do vídeo -->
+    <canvas id="hiddenCanvas" style="display: none;"></canvas>
+
+    <!-- Biblioteca para gerar QR Codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    
+    <!-- Biblioteca para decodificar QR Codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+
+    <script>
+        // Variáveis globais para controle da câmera e scanner
+        let stream = null;
+        let scanInterval = null;
+        let qr = null; // Instância do QRious para gerar QR codes
+
+        /**
+         * Alterna entre as abas de gerar e escanear QR code
+         * @param {string} tabName - Nome da aba (generator ou scanner)
+         */
+        function switchTab(tabName) {
+            // Remove classe active de todas as abas
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Adiciona classe active na aba selecionada
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            // Para a câmera se estiver mudando para a aba do gerador
+            if (tabName === 'generator' && stream) {
+                stopScanner();
+            }
+        }
+
+        /**
+         * Permite gerar QR code pressionando Enter no campo de input
+         * @param {Event} event - Evento de teclado
+         */
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                generateQR();
+            }
+        }
+
+        /**
+         * Gera um QR Code a partir da URL informada
+         */
+        function generateQR() {
+            const urlInput = document.getElementById('urlInput');
+            const url = urlInput.value.trim();
+            
+            // Valida se foi informada uma URL
+            if (!url) {
+                alert('❌ Por favor, insira um link válido!');
+                return;
+            }
+            
+            // Valida se a URL tem um formato válido
+            try {
+                new URL(url);
+            } catch (e) {
+                alert('❌ Por favor, insira um link válido (ex: https://exemplo.com)');
+                return;
+            }
+            
+            // Cria uma nova instância do QRious (biblioteca para gerar QR codes)
+            qr = new QRious({
+                element: document.getElementById('qrCanvas'),
+                value: url,
+                size: 300,
+                background: 'white',
+                foreground: '#333',
+                level: 'M' // Nível de correção de erro médio
+            });
+            
+            // Exibe o resultado
+            document.getElementById('qrResult').style.display = 'block';
+            
+            // Scroll suave até o resultado
+            document.getElementById('qrResult').scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        /**
+         * Faz download do QR Code gerado como imagem PNG
+         */
+        function downloadQR() {
+            if (!qr) return;
+            
+            const canvas = document.getElementById('qrCanvas');
+            const url = canvas.toDataURL('image/png');
+            
+            // Cria um link temporário para download
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'qrcode.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        /**
+         * Inicia a câmera para escanear QR codes
+         */
+        async function startScanner() {
+            try {
+                // Solicita acesso à câmera traseira (preferencial para escanear)
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: { ideal: 'environment' }, // Câmera traseira
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                // Atualiza os botões
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'block';
+                
+                // Limpa resultados anteriores
+                document.getElementById('scanResult').innerHTML = '';
+                
+                // Inicia o processo de escaneamento
+                scanInterval = setInterval(scanQRCode, 300); // Escaneia a cada 300ms
+                
+            } catch (error) {
+                console.error('Erro ao acessar a câmera:', error);
+                
+                let errorMessage = '❌ Erro ao acessar a câmera. ';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Permissão negada. Permita o acesso à câmera e tente novamente.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'Nenhuma câmera encontrada.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                document.getElementById('scanResult').innerHTML = 
+                    `<div class="result error">${errorMessage}</div>`;
+            }
+        }
+
+        /**
+         * Para a câmera e o processo de escaneamento
+         */
+        function stopScanner() {
+            // Para o stream da câmera
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // Para o intervalo de escaneamento
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            
+            // Atualiza os botões
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            
+            // Limpa o vídeo
+            const video = document.getElementById('video');
+            video.srcObject = null;
+        }
+
+        /**
+         * Escaneia QR code do feed da câmera
+         */
+        function scanQRCode() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('hiddenCanvas');
+            const context = canvas.getContext('2d');
+            
+            // Define o tamanho do canvas igual ao vídeo
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Desenha o frame atual do vídeo no canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Obtém os dados da imagem
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Tenta decodificar o QR code usando a biblioteca jsQR
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            
+            if (code) {
+                // QR Code detectado! Para o scanner
+                stopScanner();
+                
+                // Exibe o resultado
+                displayScanResult(code.data);
+            }
+        }
+
+        /**
+         * Exibe o resultado do QR code escaneado
+         * @param {string} data - Dados do QR code
+         */
+        function displayScanResult(data) {
+            const resultDiv = document.getElementById('scanResult');
+            
+            // Verifica se é uma URL válida
+            let isUrl = false;
+            try {
+                new URL(data);
+                isUrl = true;
+            } catch (e) {
+                // Não é uma URL válida
+            }
+            
+            let resultHTML = '<div class="result">';
+            
+            if (isUrl) {
+                resultHTML += `
+                    <strong>🔗 Link detectado:</strong><br>
+                    <a href="${data}" target="_blank" rel="noopener noreferrer">${data}</a><br>
+                    <small>👆 Clique para abrir o link</small>
+                `;
+            } else {
+                resultHTML += `
+                    <strong>📝 Texto detectado:</strong><br>
+                    ${data}
+                `;
+            }
+            
+            resultHTML += '</div>';
+            resultDiv.innerHTML = resultHTML;
+            
+            // Scroll suave até o resultado
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Para a câmera quando a página é fechada
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
+                stopScanner();
+            }
+        });
+
+        // Melhora a responsividade em dispositivos móveis
+        window.addEventListener('resize', function() {
+            if (stream) {
+                // Reajusta o vídeo se necessário
+                const video = document.getElementById('video');
+                video.style.maxWidth = '100%';
+            }
+        });
+    </script>
+</body>
+</html>
