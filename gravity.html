@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Partículas Interativo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(circle at center, #0f0f23 0%, #000 100%);
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+        }
+
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            z-index: 10;
+            font-size: 14px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            transition: all 0.1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <div>Partículas: <span id="particleCount">150</span></div>
+        <div>FPS: <span id="fps">60</span></div>
+        <div>Clique para explodir partículas!</div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" onclick="addParticles()">+ Partículas</button>
+        <button class="btn" onclick="toggleConnections()">Conexões</button>
+        <button class="btn" onclick="changeMode()">Modo</button>
+        <button class="btn" onclick="reset()">Reset</button>
+    </div>
+
+    <div class="cursor" id="cursor"></div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const cursor = document.getElementById('cursor');
+        
+        let particles = [];
+        let mouse = { x: 0, y: 0 };
+        let showConnections = true;
+        let mode = 'follow'; // 'follow', 'repel', 'orbit'
+        let frameCount = 0;
+        let lastTime = 0;
+
+        // Configurações
+        const config = {
+            particleCount: 150,
+            maxDistance: 120,
+            mouseRadius: 80,
+            colors: [
+                '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
+                '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'
+            ]
+        };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+                this.color = config.colors[Math.floor(Math.random() * config.colors.length)];
+                this.originalColor = this.color;
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.size = Math.random() * 3 + 1;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.005;
+            }
+
+            update() {
+                const dx = mouse.x - this.x;
+                const dy = mouse.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < config.mouseRadius) {
+                    const force = (config.mouseRadius - distance) / config.mouseRadius;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    switch(mode) {
+                        case 'follow':
+                            this.vx += Math.cos(angle) * force * 0.5;
+                            this.vy += Math.sin(angle) * force * 0.5;
+                            break;
+                        case 'repel':
+                            this.vx -= Math.cos(angle) * force * 0.8;
+                            this.vy -= Math.sin(angle) * force * 0.8;
+                            break;
+                        case 'orbit':
+                            this.vx += Math.cos(angle + Math.PI/2) * force * 0.6;
+                            this.vy += Math.sin(angle + Math.PI/2) * force * 0.6;
+                            break;
+                    }
+                    
+                    this.color = `hsl(${(frameCount + distance) % 360}, 70%, 60%)`;
+                } else {
+                    this.color = this.originalColor;
+                }
+
+                // Aplicar fricção
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                
+                // Atualizar posição
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Rebater nas bordas
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -0.8;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -0.8;
+                
+                this.x = Math.max(0, Math.min(canvas.width, this.x));
+                this.y = Math.max(0, Math.min(canvas.height, this.y));
+                
+                // Reduzir vida se for uma partícula explosiva
+                if (this.life < 1) {
+                    this.life -= this.decay;
+                    if (this.life <= 0) this.reset();
+                }
+            }
+
+            draw() {
+                const alpha = this.life;
+                
+                // Converter cor para formato válido com alpha
+                let colorWithAlpha = this.color;
+                let colorTransparent = this.color;
+                
+                if (this.color.startsWith('hsl')) {
+                    // Converter HSL para formato com alpha
+                    const hslMatch = this.color.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+)%,\s*(\d+)%\)/);
+                    if (hslMatch) {
+                        const h = hslMatch[1];
+                        const s = hslMatch[2];
+                        const l = hslMatch[3];
+                        colorWithAlpha = `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
+                        colorTransparent = `hsla(${h}, ${s}%, ${l}%, 0)`;
+                    }
+                } else {
+                    // Para cores hex, adicionar alpha
+                    const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                    colorWithAlpha = this.color + alphaHex;
+                    colorTransparent = this.color + '00';
+                }
+                
+                const gradient = ctx.createRadialGradient(
+                    this.x, this.y, 0,
+                    this.x, this.y, this.size * 3
+                );
+                
+                gradient.addColorStop(0, colorWithAlpha);
+                gradient.addColorStop(1, colorTransparent);
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Brilho interno
+                let innerColor = this.color;
+                if (this.color.startsWith('hsl')) {
+                    const hslMatch = this.color.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+)%,\s*(\d+)%\)/);
+                    if (hslMatch) {
+                        const h = hslMatch[1];
+                        const s = hslMatch[2];
+                        const l = hslMatch[3];
+                        innerColor = `hsla(${h}, ${s}%, ${l}%, 0.5)`;
+                    }
+                } else {
+                    innerColor = this.color + '80';
+                }
+                
+                ctx.fillStyle = innerColor;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < config.particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function drawConnections() {
+            if (!showConnections) return;
+            
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < config.maxDistance) {
+                        const opacity = 1 - distance / config.maxDistance;
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity * 0.3})`;
+                        ctx.lineWidth = opacity * 2;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 30; i++) {
+                const particle = new Particle();
+                particle.x = x + (Math.random() - 0.5) * 20;
+                particle.y = y + (Math.random() - 0.5) * 20;
+                particle.vx = (Math.random() - 0.5) * 15;
+                particle.vy = (Math.random() - 0.5) * 15;
+                particle.size = Math.random() * 5 + 2;
+                particle.life = 0.8;
+                particle.decay = Math.random() * 0.05 + 0.02;
+                particle.color = config.colors[Math.floor(Math.random() * config.colors.length)];
+                particles.push(particle);
+            }
+        }
+
+        function animate(currentTime) {
+            if (currentTime - lastTime >= 16) { // ~60 FPS
+                ctx.fillStyle = 'rgba(15, 15, 35, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                drawConnections();
+                
+                particles.forEach((particle, index) => {
+                    particle.update();
+                    particle.draw();
+                    
+                    if (particle.life <= 0 && particles.length > config.particleCount) {
+                        particles.splice(index, 1);
+                    }
+                });
+                
+                frameCount++;
+                if (frameCount % 60 === 0) {
+                    document.getElementById('fps').textContent = Math.round(1000 / (currentTime - lastTime));
+                    document.getElementById('particleCount').textContent = particles.length;
+                }
+                
+                lastTime = currentTime;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Event Listeners
+        window.addEventListener('resize', resizeCanvas);
+        
+        canvas.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            cursor.style.left = (e.clientX - 10) + 'px';
+            cursor.style.top = (e.clientY - 10) + 'px';
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            createExplosion(e.clientX, e.clientY);
+            cursor.style.transform = 'scale(2)';
+            setTimeout(() => cursor.style.transform = 'scale(1)', 200);
+        });
+
+        // Controles
+        function addParticles() {
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function toggleConnections() {
+            showConnections = !showConnections;
+        }
+
+        function changeMode() {
+            const modes = ['follow', 'repel', 'orbit'];
+            const currentIndex = modes.indexOf(mode);
+            mode = modes[(currentIndex + 1) % modes.length];
+        }
+
+        function reset() {
+            initParticles();
+        }
+
+        // Inicialização
+        resizeCanvas();
+        initParticles();
+        animate(0);
+    </script>
+</body>
+</html>
